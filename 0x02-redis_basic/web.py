@@ -1,41 +1,34 @@
 #!/usr/bin/env python3
-"""ALX SE Redis Module."""
+"""ALX SE Cache"""
 import requests
 import redis
 from functools import wraps
-from typing import Callable
 
-cache = redis.Redis()
+store = redis.Redis()
 
 
-def store_cache(method: Callable) -> Callable:
-    """Cache a value for 10 seconds."""
+def count_url_access(method):
+    """ Decorator counting how many times
+    a URL is accessed """
     @wraps(method)
     def wrapper(url):
-        """The function wrapper."""
-        if cache.get(url):
-            return cache.get(url).decode()
-        content = method(url)
-        cache.setex(url, 10, content)
-        return content
+        cached_key = "cached:" + url
+        cached_data = store.get(cached_key)
+        if cached_data:
+            return cached_data.decode("utf-8")
+
+        count_key = "count:" + url
+        html = method(url)
+
+        store.incr(count_key)
+        store.set(cached_key, html)
+        store.expire(cached_key, 10)
+        return html
     return wrapper
 
 
-def track_url(method: Callable) -> Callable:
-    """Cache a value for 10 seconds."""
-    @wraps(method)
-    def wrapper(url):
-        """The function wrapper."""
-        cache.incr(f'count:{url}')
-        return method(url)
-    return wrapper
-
-
-@store_cache
-@track_url
+@count_url_access
 def get_page(url: str) -> str:
-    """Get the content of a webpage."""
-    if cache.get(url):
-        return cache.get(url).decode()
-    content = requests.get(url)
-    return content.text
+    """ Returns HTML content of a url """
+    res = requests.get(url)
+    return res.text
